@@ -1,4 +1,5 @@
 {
+  "name": "linkedin-intelligence",
   "dependencies": {
     "node-fetch": "^3.3.2",
     "puppeteer": "^24.10.2",
