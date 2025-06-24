@@ -4,3 +4,4 @@ posts.*
 # Ignore public folder including images
 public
 content
+.DS_Store
