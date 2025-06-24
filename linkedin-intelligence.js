@@ -301,7 +301,7 @@ async function extractPosts(browser) {
         return []; // Skip posts without localImages
       }
       return post.localImages.map((localImage, imageIndex) => ({
-        title: post.text.replace(/"/g, '').replace(/\n/g, ' ').replace(/:/g, '').replace(/'/g, '').replace(/-/g, '').slice(0, 200) || `Gallery Item ${index + 1}-${imageIndex + 1}`,
+        title: post.text.replace(/"/g, '').replace(/\n/g, ' ').replace(/:/g, '').replace(/'/g, '').replace(/-/g, '') || `Gallery Item ${index + 1}-${imageIndex + 1}`,
         image: `./images/${path.basename(localImage)}`,
         watermark: post.hash || '',
       }));
