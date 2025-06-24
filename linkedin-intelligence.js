@@ -14,6 +14,12 @@ const CHROME_EXECUTABLE = '/Applications/Google Chrome.app/Contents/MacOS/Google
 const REMOTE_DEBUGGING_PORT = 9222;
 const STORAGE_FILE = './posts.json';
 
+// Remove posts.json if it exists
+if (fs.existsSync(STORAGE_FILE)) {
+  console.log(`Removing existing ${STORAGE_FILE}...`);
+  fs.rmSync(STORAGE_FILE);
+}
+
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
 const computeHash = (post) => {
@@ -24,9 +30,19 @@ const computeHash = (post) => {
   return crypto.createHash('sha1').update(content).digest('hex');
 };
 
+console.log('Initializing Puppeteer setup...');
+
+const args = process.argv.slice(2);
+const headless = args.includes('--headless');
+const extractPostsFlag = args.includes('--extractPosts');
+
 async function launchChrome(headless = false) {
-  if (!fs.existsSync(CHROME_DATA_DIR)) fs.mkdirSync(CHROME_DATA_DIR, { recursive: true });
-  const args = [
+  console.log('Launching Chrome browser...');
+  if (!fs.existsSync(CHROME_DATA_DIR)) {
+    console.log('Creating Chrome data directory...');
+    fs.mkdirSync(CHROME_DATA_DIR, { recursive: true });
+  }
+  const chromeArgs = [
     `--remote-debugging-port=${REMOTE_DEBUGGING_PORT}`,
     `--user-data-dir=${CHROME_DATA_DIR}`,
     '--no-first-run',
@@ -34,138 +50,220 @@ async function launchChrome(headless = false) {
   ];
 
   if (headless) {
-    args.push('--headless', '--disable-gpu');
+    console.log('Running in headless mode...');
+    chromeArgs.push('--headless', '--disable-gpu');
   }
 
-  childProcess.spawn(CHROME_EXECUTABLE, args, { detached: true, stdio: 'ignore' }).unref();
+  console.log('Spawning Chrome process...');
+  const chromeProcess = childProcess.spawn(CHROME_EXECUTABLE, chromeArgs, { detached: true, stdio: 'ignore' });
+  chromeProcess.on('error', (err) => {
+    console.error(`Failed to launch Chrome: ${err.message}`);
+  });
+
+  chromeProcess.kill = () => {
+    try {
+      process.kill(chromeProcess.pid);
+      console.log('Chrome process terminated successfully.');
+    } catch (error) {
+      console.error(`Failed to terminate Chrome process: ${error.message}`);
+    }
+  };
+
+  chromeProcess.unref();
+  return chromeProcess;
 }
 
 async function waitForChrome() {
+  console.log('Waiting for Chrome to be ready...');
   const start = Date.now();
   while (Date.now() - start < 8000) {
     try {
       const res = await fetch(`http://localhost:${REMOTE_DEBUGGING_PORT}/json/version`);
       const json = await res.json();
-      if (json.webSocketDebuggerUrl) return json.webSocketDebuggerUrl;
-    } catch {
+      if (json.webSocketDebuggerUrl) {
+        console.log('Chrome is ready.');
+        return json.webSocketDebuggerUrl;
+      }
+    } catch (error) {
+      console.log(`Chrome not ready yet, retrying... (${error.message})`);
       await new Promise(r => setTimeout(r, 300));
     }
   }
   throw new Error('Timed out waiting for Chrome to be ready');
 }
 
+const IMAGE_DIR = './public/images';
+
+// Ensure the images directory exists and is empty
+if (fs.existsSync(IMAGE_DIR)) {
+  console.log(`Clearing images directory at ${IMAGE_DIR}...`);
+  fs.rmSync(IMAGE_DIR, { recursive: true, force: true });
+}
+fs.mkdirSync(IMAGE_DIR, { recursive: true });
+
+async function downloadImage(url, hash, page) {
+  try {
+    // Skip saving images from static.licdn.com and profile-displayphoto
+    if (url.includes('static.licdn.com') || url.includes('profile-displayphoto')) {
+      console.log(`Skipping image: ${url}`);
+      return null;
+    }
+
+    const imageBuffer = await page.evaluate(async (imageUrl) => {
+      try {
+        const response = await fetch(imageUrl);
+        if (!response.ok) throw new Error(`Failed to fetch image: ${imageUrl}`);
+        const arrayBuffer = await response.arrayBuffer();
+        console.log(`Fetched arrayBuffer for URL: ${imageUrl}, size: ${arrayBuffer.byteLength}`); // Debugging statement
+        return Array.from(new Uint8Array(arrayBuffer)); // Convert to Array-like object
+      } catch (error) {
+        console.error(`Error fetching image: ${error.message}`);
+        return null;
+      }
+    }, url);
+
+    if (!imageBuffer || !Array.isArray(imageBuffer)) {
+      console.error(`Image buffer is undefined or not a valid Array-like object for URL: ${url}`);
+      return null;
+    }
+
+    const filePath = path.join(IMAGE_DIR, `${hash}.jpg`);
+    fs.writeFileSync(filePath, Buffer.from(imageBuffer));
+
+    console.log(`Saved image to ${filePath}`);
+    return filePath;
+  } catch (error) {
+    console.error(`Error saving image: ${error.message}`);
+    return null;
+  }
+}
+
+console.log('Starting script execution...');
+
+(async () => {
+  let chromeProcess;
+  try {
+    console.log('Launching Chrome...');
+    chromeProcess = await launchChrome(headless);
+    const debuggerUrl = await waitForChrome();
+    console.log(`Debugger URL: ${debuggerUrl}`);
+
+    const browser = await puppeteer.connect({ browserWSEndpoint: debuggerUrl });
+    console.log('Browser connected successfully.');
+
+    if (extractPostsFlag) {
+      await extractPosts(browser);
+      console.log('Posts extraction completed.');
+    } else {
+      console.log('Browser launched without extracting posts.');
+      console.log('Please close the Chrome window manually to terminate the process.');
+
+      // Wait for the Chrome process to exit
+      await new Promise(resolve => {
+        chromeProcess.on('exit', () => {
+          console.log('Chrome window closed manually.');
+          resolve();
+        });
+      });
+    }
+
+    await browser.disconnect();
+    console.log('Browser disconnected.');
+  } catch (error) {
+    console.error(`Script failed: ${error.message}`);
+  } finally {
+    if (chromeProcess) {
+      console.log('Closing Chrome process...');
+      chromeProcess.kill();
+    }
+  }
+})();
+
 async function extractPosts(browser) {
+  console.log('Launching browser...');
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800 });
 
   console.log('📡 Fetching hydrated activity feed...');
   try {
     await page.goto(`${LINKEDIN_ROOT}/in/matthieu-achard-168a5969/recent-activity/all/`, { waitUntil: 'domcontentloaded', timeout: 0 });
-
-    const newPosts = [];
-
-    const args = process.argv.slice(2);
-    const batchFlagIndex = args.indexOf('--batch');
-    const maxBatches = batchFlagIndex !== -1 ? parseInt(args[batchFlagIndex + 1], 10) : null;
+    console.log('Page loaded successfully.');
 
     console.log('🌀 Aggressively scrolling and hydrating feed...');
-    const extractedPosts = await page.evaluate(async (maxBatches) => {
-      const posts = [];
-      let stagnant = 0;
-      let lastHeight = document.body.scrollHeight;
-      let batchCount = 0;
+    let stagnant = 0;
+    let lastHeight = await page.evaluate(() => document.body.scrollHeight);
 
-      while (stagnant < 7 && (maxBatches === null || batchCount < maxBatches)) {
-        window.scrollBy(0, -50); // upward nudge to stabilize layout
-        await new Promise(r => setTimeout(r, 250));
+    while (stagnant < 7) {
+      await page.evaluate(() => window.scrollBy(0, -50)); // upward nudge to stabilize layout
+      await new Promise(r => setTimeout(r, 250));
 
-        window.scrollTo(0, document.body.scrollHeight); // full bottom scroll
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)); // full bottom scroll
 
-        // Force lazy image loading
-        const imgs = [...document.querySelectorAll('img')];
-        for (const img of imgs) {
-          const src = img.getAttribute('data-src') || img.dataset?.src;
-          if (!img.src && src) img.src = src;
-          img.scrollIntoView({ behavior: 'instant', block: 'center' });
-        }
+      // Click 'Show more results' if visible
+      const showMoreButton = await page.evaluate(() => {
+        const button = [...document.querySelectorAll('button')].find(el => el.textContent.includes('Show more results'));
+        if (button) button.click();
+        return button;
+      });
 
-        // Click 'Show more results' if visible
-        const btn = [...document.querySelectorAll('button, span')]
-          .find(el => /show more/i.test(el.innerText || ''));
-        if (btn) btn.click();
+      await new Promise(r => setTimeout(r, 1000));
 
-        await new Promise(r => setTimeout(r, 1000));
-
-        const newBatch = [...document.querySelectorAll('div.feed-shared-update-v2')].map(block => {
-          const textBlock =
-            block.querySelector('div.update-components-text') ||
-            block.querySelector('div.feed-shared-update-v2__description');
-          const text = textBlock?.innerText?.trim() || '';
-
-          const images = [...block.querySelectorAll('img')]
-            .map(img => img.src)
-            .filter(src => /media\.licdn\.com/.test(src));
-
-          const viewsNode = [...block.querySelectorAll('span, button, li')]
-            .map(n => n.innerText?.trim())
-            .find(t => /\d[\d,.]*\s+(views|impressions)/i.test(t));
-          let views = null;
-          if (viewsNode) {
-            const match = viewsNode.match(/\d[\d,.]+/);
-            if (match && match[0]) views = parseInt(match[0].replace(/,/g, ''));
-          }
-
-          return { text, images, views };
-        });
-
-        posts.push(...newBatch);
-        batchCount++;
-
-        const currentHeight = document.body.scrollHeight;
-        if (currentHeight === lastHeight) {
-          stagnant++;
-        } else {
-          stagnant = 0;
-          lastHeight = currentHeight;
-        }
+      const currentHeight = await page.evaluate(() => document.body.scrollHeight);
+      if (currentHeight === lastHeight) {
+        stagnant++;
+      } else {
+        stagnant = 0;
+        lastHeight = currentHeight;
       }
-
-      return posts;
-    }, maxBatches);
-
-    newPosts.push(...extractedPosts);
-    console.log(`Raw extracted: ${newPosts.length}`);
-
-    let existing = [];
-    try {
-      existing = JSON.parse(fs.readFileSync(STORAGE_FILE, 'utf8'));
-    } catch {
-      console.log('🆕 No existing posts.json found, creating new one.');
     }
 
-    const memory = new Map();
-    existing.forEach(p => memory.set(p.hash, p));
+    console.log('Finished scrolling. Extracting posts...');
+
+    const extractedPosts = await page.evaluate(() => {
+      const posts = [];
+
+      const postElements = document.querySelectorAll('div.feed-shared-update-v2');
+      postElements.forEach(block => {
+        const textBlock =
+          block.querySelector('div.update-components-text') ||
+          block.querySelector('div.feed-shared-update-v2__description');
+        const text = textBlock?.innerText?.trim() || '';
+
+        const images = [...block.querySelectorAll('img')]
+          .map(img => img.src); // Removed filtering logic here
+
+        const viewsNode = [...block.querySelectorAll('span, button, li')]
+          .map(n => n.innerText?.trim())
+          .find(t => /\d[\d,.]*\s+(views|impressions)/i.test(t));
+        let views = null;
+        if (viewsNode) {
+          const match = viewsNode.match(/\d[\d,.]+/);
+          if (match && match[0]) views = parseInt(match[0].replace(/,/g, ''));
+        }
+
+        const timeNode = block.querySelector('span.feed-shared-actor__sub-description');
+        const time = timeNode?.innerText?.trim() || '';
+
+        posts.push({ text, images, views, time });
+      });
+
+      return posts;
+    });
+
+    console.log(`Extracted ${extractedPosts.length} posts with valid image URLs.`);
 
     const now = new Date().toISOString();
     let updated = 0;
-    const merged = [...newPosts]
+    const merged = [...extractedPosts]
       .map(p => {
         const hash = computeHash(p);
-        const existing = memory.get(hash);
         const fresh = { ...p, hash, fetchedAt: now };
 
-        if (!existing) return fresh;
-
-        if (p.views != null && p.views !== existing.views) {
-          updated++;
-          return { ...existing, views: p.views, fetchedAt: now };
-        }
-
-        return existing;
+        return fresh;
       });
 
     const uniqueHashes = new Set();
-    const final = [...merged, ...existing]
+    const final = [...merged]
       .filter(p => {
         if (uniqueHashes.has(p.hash)) return false;
         uniqueHashes.add(p.hash);
@@ -174,35 +272,61 @@ async function extractPosts(browser) {
 
     fs.writeFileSync(STORAGE_FILE, JSON.stringify(final, null, 2));
     console.log(`✅ Added ${merged.length - updated} new post(s), updated ${updated} views. Total: ${final.length}`);
-  } catch (error) {
-    console.error(`❌ Failed to fetch activity feed: ${error.message}`);
-    await browser.disconnect();
-    process.exit(1);
-  }
-}
 
-(async () => {
-  const headless = !process.argv.includes('--config');
-  await launchChrome(headless);
-  const wsEndpoint = await waitForChrome();
-  const browser = await puppeteer.connect({ browserWSEndpoint: wsEndpoint });
+    // Moved the backup logic to just before downloading images
+    console.log('📥 Downloading images and updating posts.json...');
+    for (const post of final) {
+      const localImages = [];
+      for (const image of post.images) {
+        const localPath = await downloadImage(image, post.hash, page);
+        if (localPath) {
+          localImages.push(localPath);
+        }
+      }
+      post.localImages = localImages;
+    }
 
-  if (headless) {
-    await extractPosts(browser);
-    console.log('🔧 Closing browser after extraction process.');
-    await browser.close();
-  } else {
-    console.log('🔧 Configuration mode enabled. Launching browser to LinkedIn homepage.');
-    const page = await browser.newPage();
-    await page.goto(LINKEDIN_ROOT, { waitUntil: 'load' });
-    console.log('🔧 Browser launched to LinkedIn homepage.');
+    fs.writeFileSync(STORAGE_FILE, JSON.stringify(final, null, 2));
+    console.log('🌟 Posts extraction and image download completed successfully.');
 
-    page.on('close', () => {
-      console.log('🔧 Browser window closed. Terminating process.');
-      childProcess.execSync(`pkill -f "${CHROME_EXECUTABLE}"`); // Forcefully kill Chrome process
-      process.exit(0);
+    // Incorporating postsTransformer logic
+    console.log('🔄 Transforming posts to Hugo gallery items...');
+    const contentDir = './content/gallery';
+    if (!fs.existsSync(contentDir)) {
+      fs.mkdirSync(contentDir, { recursive: true });
+    }
+
+    const galleryItems = final.flatMap((post, index) => {
+      if (!post.localImages || post.localImages.length === 0) {
+        return []; // Skip posts without localImages
+      }
+      return post.localImages.map((localImage, imageIndex) => ({
+        title: post.text.replace(/"/g, '').replace(/\n/g, ' ').replace(/:/g, '').replace(/'/g, '').replace(/-/g, '').slice(0, 200) || `Gallery Item ${index + 1}-${imageIndex + 1}`,
+        image: `./images/${path.basename(localImage)}`,
+        watermark: post.hash || '',
+      }));
     });
 
-    await new Promise(resolve => browser.on('disconnected', resolve));
+    galleryItems.forEach((item, index) => {
+      const filePath = path.join(contentDir, `gallery-item-${index + 1}.md`);
+      const markdownContent = `---\n` +
+        `title: "${item.title}"\n` +
+        `image: "${item.image}"\n` +
+        `watermark: "${item.watermark}"\n` +
+        `section: "gallery"\n` +
+        `---\n`;
+      try {
+        fs.writeFileSync(filePath, markdownContent);
+      } catch (error) {
+        console.error(`Failed to write file ${filePath}:`, error);
+      }
+    });
+
+    console.log('✅ Gallery items prepared for Hugo successfully.');
+  } catch (error) {
+    console.error(`Error in extractPosts: ${error.message}`);
+  } finally {
+    await page.close();
+    console.log('Browser page closed.');
   }
-})();
+}

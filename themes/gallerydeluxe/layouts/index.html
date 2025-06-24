@@ -1,0 +1,10 @@
+<div id="gallerydeluxe" class="gallery">
+  {{ range (where .Site.Pages "Section" "gallery") }}
+  <div class="gallery-item">
+    <img src="{{ .Params.image }}" alt="{{ .Title }}">
+    <p>{{ .Title }}</p>
+  </div>
+  {{ else }}
+  <p>No gallery items found.</p>
+  {{ end }}
+</div>

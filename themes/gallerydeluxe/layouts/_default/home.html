@@ -1,0 +1,13 @@
+<div id="homepage">
+  <h1>Welcome to My Hugo Site</h1>
+  <div id="gallerydeluxe" class="gallery">
+    {{ range (where .Site.Pages "Section" "gallery") }}
+    <div class="gallery-item">
+      <img src="{{ .Params.image }}" alt="{{ .Title }}">
+      <p>{{ .Title }}</p>
+    </div>
+    {{ else }}
+    <p>No gallery items found.</p>
+    {{ end }}
+  </div>
+</div>

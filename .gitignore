@@ -1,3 +1,6 @@
 node_modules
 puppeteer-session
 posts.*
+# Ignore public folder including images
+public
+content

@@ -1,0 +1,8 @@
+baseURL = "http://example.com/"
+languageCode = "en-us"
+theme = "gallerydeluxe"
+title = "My Hugo Site"
+[outputs]
+home = ["HTML", "JSON"]
+[params]
+galleryDir = "content/gallery"

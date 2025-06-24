@@ -1,0 +1,13 @@
+[
+  {
+    "pages": [
+      {{ range $index, $page := .Site.RegularPages }}
+      {
+        "title": "{{ $page.Title }}",
+        "image": "{{ $page.Params.image }}",
+        "watermark": "{{ $page.Params.watermark }}"
+      }{{ if ne (add $index 1) (len .Site.RegularPages) }},{{ end }}
+      {{ end }}
+    ]
+  }
+]
