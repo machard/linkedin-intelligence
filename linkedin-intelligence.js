@@ -296,23 +296,19 @@ async function extractPosts(browser) {
       fs.mkdirSync(contentDir, { recursive: true });
     }
 
-    // Updated markdown generation logic to ensure all posts are processed, including those without images, by creating placeholder markdown files.
+    // Updated markdown generation logic to exclude posts without images
     const galleryItems = final.map((post, index) => {
       const localImages = post.localImages || [];
       if (localImages.length === 0) {
-        // Create a markdown file for posts without images
-        return {
-          title: post.text.replace(/"/g, '').replace(/\n/g, ' ').replace(/:/g, '').replace(/'/g, '').replace(/-/g, '') || `Gallery Item ${index + 1}`,
-          image: "", // Placeholder for missing image
-          watermark: post.order || '',
-        };
+        console.log(`Skipping post without images: ${post.text}`);
+        return null; // Exclude posts without images
       }
       return localImages.map((localImage, imageIndex) => ({
         title: post.text.replace(/"/g, '').replace(/\n/g, ' ').replace(/:/g, '').replace(/'/g, '').replace(/-/g, '') || `Gallery Item ${index + 1}-${imageIndex + 1}`,
         image: `./images/${path.basename(localImage)}`,
         watermark: post.order || '',
       }));
-    }).flat();
+    }).flat().filter(Boolean); // Remove null values
 
     galleryItems.forEach((item, index) => {
       const filePath = path.join(contentDir, `gallery-item-${String(index + 1).padStart(3, '0')}.md`);

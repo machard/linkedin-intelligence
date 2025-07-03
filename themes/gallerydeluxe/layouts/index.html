@@ -1,44 +1,122 @@
 <div id="homepage">
-  <h1>{{ .Site.Title }}</h1>
   <div id="gallerydeluxe" class="gallery">
     {{ $galleryPages := where .Site.Pages "Section" "gallery" }}
     {{ if $galleryPages }}
       {{ $validPages := where $galleryPages "Params.image" "ne" "" }}
-      {{ $sortedPages := sort $validPages "Params.watermark" "asc" }}
+      {{ $filteredPages := where $validPages "Params.menu" "ne" true }}
+      {{ $sortedPages := sort $filteredPages "Params.watermark" "asc" }}
       {{ range $sortedPages }}
-        <div class="gallery-item">
-          <img src="{{ .Params.image }}" alt="{{ .Title }}">
-          <p>{{ .Title }}</p>
-        </div>
-      {{ end }}
-      <!-- Debugging output -->
-      <pre>
-        {{ printf "Gallery Pages: %v" $galleryPages }}
-        {{ printf "Valid Pages: %v" $validPages }}
-        {{ printf "Sorted Pages: %v" $sortedPages }}
-        {{ range $galleryPages }}
-          {{ printf "Params for %s: %v" .Title .Params }}
+        {{ if not .IsSection }}
+          <div class="gallery-item" onclick="showPopin('{{ .Params.image }}', '{{ .Title }}')">
+            <img src="{{ .Params.image }}" alt="{{ .Title }}">
+          </div>
         {{ end }}
-      </pre>
+      {{ end }}
     {{ else }}
       <p>No gallery items found.</p>
     {{ end }}
   </div>
 </div>
 
+<div id="popin" class="popin">
+  <div class="popin-content">
+    <div class="popin-text">
+      <p id="popin-text"></p>
+    </div>
+    <div class="popin-image">
+      <img id="popin-image" src="" alt="">
+    </div>
+  </div>
+</div>
+<div id="overlay" class="overlay" onclick="hidePopin()"></div>
+
 <style>
+  body {
+    background-color: #121212;
+    color: #ffffff;
+    margin: 0;
+    font-family: Arial, sans-serif;
+  }
+
   .gallery {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 10px;
     width: 100%;
     margin: 0 auto;
+    padding: 20px;
   }
 
   .gallery-item img {
     width: 100%;
     height: auto;
     border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+  }
+
+  .gallery-item img:hover {
+    transform: scale(1.05);
+    transition: transform 0.3s ease;
+  }
+
+  .popin {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: #1e1e1e;
+    color: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
+    width: 80%;
+    max-width: 800px;
+    padding: 20px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .popin-text {
+    flex: 1;
+    padding-right: 20px;
+  }
+
+  .popin-image {
+    flex: 1;
+  }
+
+  .popin img {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+  }
+
+  .overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    z-index: 999;
   }
 </style>
+
+<script>
+  function showPopin(imageSrc, text) {
+    if (!imageSrc || !text) return; // Prevent empty pop-in
+    document.getElementById('popin-image').src = imageSrc;
+    document.getElementById('popin-text').textContent = text;
+    document.getElementById('popin').style.display = 'flex';
+    document.getElementById('overlay').style.display = 'block';
+  }
+
+  function hidePopin() {
+    document.getElementById('popin').style.display = 'none';
+    document.getElementById('overlay').style.display = 'none';
+  }
+</script>
