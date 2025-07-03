@@ -1,8 +1,0 @@
-<div class="gallery">
-  {{ range (where .Site.Pages "Section" "gallery") }}
-  <div class="gallery-item">
-    <h2>{{ .Title }}</h2>
-    <img src="{{ .Params.image }}" alt="{{ .Title }}">
-  </div>
-  {{ end }}
-</div>

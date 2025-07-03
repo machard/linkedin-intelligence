@@ -1,5 +1,7 @@
 <div class="page">
   <h1>{{ .Title }}</h1>
+  {{ if .Params.image }}
   <img src="{{ .Params.image }}" alt="Gallery Image">
+  {{ end }}
   <p>Watermark: {{ .Params.watermark }}</p>
 </div>

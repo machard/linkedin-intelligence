@@ -1,10 +1,44 @@
-<div id="gallerydeluxe" class="gallery">
-  {{ range (where .Site.Pages "Section" "gallery") }}
-  <div class="gallery-item">
-    <img src="{{ .Params.image }}" alt="{{ .Title }}">
-    <p>{{ .Title }}</p>
+<div id="homepage">
+  <h1>{{ .Site.Title }}</h1>
+  <div id="gallerydeluxe" class="gallery">
+    {{ $galleryPages := where .Site.Pages "Section" "gallery" }}
+    {{ if $galleryPages }}
+      {{ $validPages := where $galleryPages "Params.image" "ne" "" }}
+      {{ $sortedPages := sort $validPages "Params.watermark" "asc" }}
+      {{ range $sortedPages }}
+        <div class="gallery-item">
+          <img src="{{ .Params.image }}" alt="{{ .Title }}">
+          <p>{{ .Title }}</p>
+        </div>
+      {{ end }}
+      <!-- Debugging output -->
+      <pre>
+        {{ printf "Gallery Pages: %v" $galleryPages }}
+        {{ printf "Valid Pages: %v" $validPages }}
+        {{ printf "Sorted Pages: %v" $sortedPages }}
+        {{ range $galleryPages }}
+          {{ printf "Params for %s: %v" .Title .Params }}
+        {{ end }}
+      </pre>
+    {{ else }}
+      <p>No gallery items found.</p>
+    {{ end }}
   </div>
-  {{ else }}
-  <p>No gallery items found.</p>
-  {{ end }}
 </div>
+
+<style>
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .gallery-item img {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+</style>

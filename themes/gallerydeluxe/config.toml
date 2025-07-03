@@ -1,0 +1,8 @@
+baseURL = "http://example.com/"
+languageCode = "en-us"
+title = "Gallery Deluxe Theme"
+[params]
+  galleryDir = "content/gallery"
+[outputs]
+  home = ["HTML", "JSON"]
+  section = ["HTML", "JSON"]

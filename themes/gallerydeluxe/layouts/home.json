@@ -1,4 +1,0 @@
-{
-  "siteTitle": "{{ .Site.Title }}",
-  "page": "{{ .Page.Title }}"
-}

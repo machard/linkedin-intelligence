@@ -101,10 +101,10 @@ if (fs.existsSync(IMAGE_DIR)) {
 }
 fs.mkdirSync(IMAGE_DIR, { recursive: true });
 
-async function downloadImage(url, hash, page) {
+async function downloadImage(url, itemNumber, page) {
   try {
     // Skip saving images from static.licdn.com and profile-displayphoto
-    if (url.includes('static.licdn.com') || url.includes('profile-displayphoto')) {
+    if (url.includes('profile-displayphoto')) {
       console.log(`Skipping image: ${url}`);
       return null;
     }
@@ -114,8 +114,7 @@ async function downloadImage(url, hash, page) {
         const response = await fetch(imageUrl);
         if (!response.ok) throw new Error(`Failed to fetch image: ${imageUrl}`);
         const arrayBuffer = await response.arrayBuffer();
-        console.log(`Fetched arrayBuffer for URL: ${imageUrl}, size: ${arrayBuffer.byteLength}`); // Debugging statement
-        return Array.from(new Uint8Array(arrayBuffer)); // Convert to Array-like object
+        return Array.from(new Uint8Array(arrayBuffer));
       } catch (error) {
         console.error(`Error fetching image: ${error.message}`);
         return null;
@@ -127,10 +126,10 @@ async function downloadImage(url, hash, page) {
       return null;
     }
 
-    const filePath = path.join(IMAGE_DIR, `${hash}.jpg`);
+    const filePath = path.join(IMAGE_DIR, `gallery-item-${String(itemNumber).padStart(3, '0')}.jpg`);
     fs.writeFileSync(filePath, Buffer.from(imageBuffer));
 
-    console.log(`Saved image to ${filePath}`);
+    console.log(`Saved image to ${filePath} from ${url}`);
     return filePath;
   } catch (error) {
     console.error(`Error saving image: ${error.message}`);
@@ -190,10 +189,12 @@ async function extractPosts(browser) {
     console.log('Page loaded successfully.');
 
     console.log('🌀 Aggressively scrolling and hydrating feed...');
+    // Enhanced scrolling logic to ensure all posts are loaded
     let stagnant = 0;
     let lastHeight = await page.evaluate(() => document.body.scrollHeight);
+    let maxScrollAttempts = 20; // Limit the number of scroll attempts to avoid infinite loops
 
-    while (stagnant < 7) {
+    while (stagnant < 7 && maxScrollAttempts > 0) {
       await page.evaluate(() => window.scrollBy(0, -50)); // upward nudge to stabilize layout
       await new Promise(r => setTimeout(r, 250));
 
@@ -215,6 +216,12 @@ async function extractPosts(browser) {
         stagnant = 0;
         lastHeight = currentHeight;
       }
+
+      maxScrollAttempts--;
+    }
+
+    if (maxScrollAttempts === 0) {
+      console.warn('Reached maximum scroll attempts. Some posts might not be loaded.');
     }
 
     console.log('Finished scrolling. Extracting posts...');
@@ -252,63 +259,63 @@ async function extractPosts(browser) {
 
     console.log(`Extracted ${extractedPosts.length} posts with valid image URLs.`);
 
+    // Removed intermediary save to disk and directly sort posts
     const now = new Date().toISOString();
-    let updated = 0;
-    const merged = [...extractedPosts]
-      .map(p => {
-        const hash = computeHash(p);
-        const fresh = { ...p, hash, fetchedAt: now };
+    const final = extractedPosts.map((post, index) => ({
+      ...post,
+      order: index + 1 // Assign order based on scraping sequence
+    }));
 
-        return fresh;
-      });
+    console.log('🌟 Posts ordered as scraped successfully.');
 
-    const uniqueHashes = new Set();
-    const final = [...merged]
-      .filter(p => {
-        if (uniqueHashes.has(p.hash)) return false;
-        uniqueHashes.add(p.hash);
-        return true;
-      });
+    // Updated image download logic to use Promise.all for asynchronous fetching
+    const downloadImages = async (images, order, page) => {
+      const localImages = await Promise.all(
+        images.map(async (image) => {
+          if (image.includes('static.licdn.com')) {
+            console.log(`Skipping image: ${image}`);
+            return null;
+          }
+          const localPath = await downloadImage(image, order, page);
+          return localPath;
+        })
+      );
+      return localImages.filter(Boolean); // Remove null values
+    };
 
-    fs.writeFileSync(STORAGE_FILE, JSON.stringify(final, null, 2));
-    console.log(`✅ Added ${merged.length - updated} new post(s), updated ${updated} views. Total: ${final.length}`);
-
-    // Moved the backup logic to just before downloading images
-    console.log('📥 Downloading images and updating posts.json...');
+    // Invoke downloadImages function for each post
     for (const post of final) {
-      const localImages = [];
-      for (const image of post.images) {
-        const localPath = await downloadImage(image, post.hash, page);
-        if (localPath) {
-          localImages.push(localPath);
-        }
-      }
-      post.localImages = localImages;
+      post.localImages = await downloadImages(post.images, post.order, page);
     }
 
-    fs.writeFileSync(STORAGE_FILE, JSON.stringify(final, null, 2));
-    console.log('🌟 Posts extraction and image download completed successfully.');
+    console.log('📥 Images downloaded and associated with posts successfully.');
 
-    // Incorporating postsTransformer logic
-    console.log('🔄 Transforming posts to Hugo gallery items...');
+    // Logic to create markdown files for Hugo gallery items
     const contentDir = './content/gallery';
     if (!fs.existsSync(contentDir)) {
       fs.mkdirSync(contentDir, { recursive: true });
     }
 
-    const galleryItems = final.flatMap((post, index) => {
-      if (!post.localImages || post.localImages.length === 0) {
-        return []; // Skip posts without localImages
+    // Updated markdown generation logic to ensure all posts are processed, including those without images, by creating placeholder markdown files.
+    const galleryItems = final.map((post, index) => {
+      const localImages = post.localImages || [];
+      if (localImages.length === 0) {
+        // Create a markdown file for posts without images
+        return {
+          title: post.text.replace(/"/g, '').replace(/\n/g, ' ').replace(/:/g, '').replace(/'/g, '').replace(/-/g, '') || `Gallery Item ${index + 1}`,
+          image: "", // Placeholder for missing image
+          watermark: post.order || '',
+        };
       }
-      return post.localImages.map((localImage, imageIndex) => ({
+      return localImages.map((localImage, imageIndex) => ({
         title: post.text.replace(/"/g, '').replace(/\n/g, ' ').replace(/:/g, '').replace(/'/g, '').replace(/-/g, '') || `Gallery Item ${index + 1}-${imageIndex + 1}`,
         image: `./images/${path.basename(localImage)}`,
-        watermark: post.hash || '',
+        watermark: post.order || '',
       }));
-    });
+    }).flat();
 
     galleryItems.forEach((item, index) => {
-      const filePath = path.join(contentDir, `gallery-item-${index + 1}.md`);
+      const filePath = path.join(contentDir, `gallery-item-${String(index + 1).padStart(3, '0')}.md`);
       const markdownContent = `---\n` +
         `title: "${item.title}"\n` +
         `image: "${item.image}"\n` +
@@ -322,7 +329,30 @@ async function extractPosts(browser) {
       }
     });
 
-    console.log('✅ Gallery items prepared for Hugo successfully.');
+    console.log('✅ Gallery items prepared for Hugo successfully, including posts without images.');
+
+    // Sort gallery items by their filenames before rendering
+    const sortedGalleryItems = fs.readdirSync(contentDir)
+      .filter(file => file.startsWith('gallery-item-') && file.endsWith('.md'))
+      .sort((a, b) => {
+        const numA = parseInt(a.match(/\d+/)[0], 10);
+        const numB = parseInt(b.match(/\d+/)[0], 10);
+        return numA - numB;
+      });
+
+    sortedGalleryItems.forEach((file, index) => {
+      const filePath = path.join(contentDir, file);
+      const markdownContent = fs.readFileSync(filePath, 'utf-8');
+      const updatedContent = markdownContent.replace(/watermark: \"\d+\"/, `watermark: \"${index + 1}\"`);
+      fs.writeFileSync(filePath, updatedContent);
+    });
+
+    console.log('Gallery items reordered and updated successfully.');
+
+    // Logic to render gallery items in sorted order
+    console.log('Gallery items sorted by filename:', sortedGalleryItems);
+
+    return final;
   } catch (error) {
     console.error(`Error in extractPosts: ${error.message}`);
   } finally {

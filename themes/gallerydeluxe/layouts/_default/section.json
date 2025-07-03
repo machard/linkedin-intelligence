@@ -1,0 +1,20 @@
+[
+  {
+    "sections": [
+      {{ range $index, $section := .Site.Sections }}
+      {
+        "title": "{{ $section.Title }}",
+        "pages": [
+          {{ range $page := $section.Pages }}
+          {
+            "title": "{{ $page.Title }}",
+            "image": "{{ $page.Params.image }}",
+            "watermark": "{{ $page.Params.watermark }}"
+          }{{ if ne (add $index 1) (len $section.Pages) }},{{ end }}
+          {{ end }}
+        ]
+      }{{ if ne (add $index 1) (len .Site.Sections) }},{{ end }}
+      {{ end }}
+    ]
+  }
+]

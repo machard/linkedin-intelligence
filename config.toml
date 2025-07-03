@@ -2,7 +2,14 @@ baseURL = "http://example.com/"
 languageCode = "en-us"
 theme = "gallerydeluxe"
 title = "My Hugo Site"
-[outputs]
-home = ["HTML", "JSON"]
+
+[taxonomies]
+category = "categories"
+tag = "tags"
+
 [params]
 galleryDir = "content/gallery"
+
+[outputs]
+home = ["HTML", "JSON"]
+section = ["HTML", "JSON"]
