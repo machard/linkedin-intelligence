@@ -20,11 +20,11 @@
 
 <div id="popin" class="popin">
   <div class="popin-content">
-    <div class="popin-text">
+    <div class="popin-left">
       <p id="popin-text"></p>
     </div>
-    <div class="popin-image">
-      <img id="popin-image" src="" alt="">
+    <div class="popin-right">
+      <div id="popin-image-container" class="popin-image-container" style="background-image: url('');"></div>
     </div>
   </div>
 </div>
@@ -48,8 +48,9 @@
   }
 
   .gallery-item img {
-    width: 100%;
-    height: auto;
+    width: 100%; /* Ensure the image fills its grid spot */
+    height: 100%; /* Ensure the image fills its grid spot */
+    object-fit: cover; /* Maintain aspect ratio while filling the space */
     border-radius: 8px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
     cursor: pointer;
@@ -61,7 +62,12 @@
   }
 
   .popin {
-    display: none;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start; /* Align content to the top */
+    padding: 20px;
+    box-sizing: border-box;
     position: fixed;
     top: 50%;
     left: 50%;
@@ -70,32 +76,65 @@
     color: #ffffff;
     border-radius: 8px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
-    width: 80%;
-    max-width: 800px;
-    padding: 20px;
+    width: 90%;
+    max-width: 1200px;
+    height: 80vh; /* Fixed height for the modal */
     z-index: 1000;
+    overflow: hidden; /* Prevent content from exceeding the modal */
+  }
+
+  .popin-content {
     display: flex;
     flex-direction: row;
-    align-items: center;
+    align-items: flex-start; /* Align content to the top */
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
   }
 
-  .popin-text {
+  .popin-left {
     flex: 1;
-    padding-right: 20px;
+    padding: 20px;
+    overflow-y: auto; /* Ensure text is scrollable */
+    text-align: left;
+    max-height: 100%;
   }
 
-  .popin-image {
+  .popin-right {
     flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start; /* Align the content to the top */
+    padding: 20px;
+    box-sizing: border-box;
+    height: 100%; /* Ensure the container fills the height of the modal */
+    overflow: hidden; /* Prevent content overflow */
+  }
+
+  .popin-image-container {
+    width: 100%; /* Ensure the container fills its space */
+    height: 100%; /* Ensure the container fills its space */
+    background-size: contain; /* Scale the background image to fit */
+    background-repeat: no-repeat; /* Prevent tiling */
+    background-position: center; /* Center the background image */
   }
 
   .popin img {
-    width: 100%;
-    height: auto;
+    max-width: 100%;
+    max-height: 70%; /* Limit image height */
     border-radius: 8px;
+    margin-bottom: 20px; /* Space between image and text */
+  }
+
+  .popin p {
+    font-size: 1.2em;
+    text-align: center;
+    overflow-y: auto; /* Allow scrolling for long text */
+    max-height: 30%; /* Limit text height */
   }
 
   .overlay {
-    display: none;
+    display: none; /* Ensure overlay is hidden at launch */
     position: fixed;
     top: 0;
     left: 0;
@@ -107,16 +146,39 @@
 </style>
 
 <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const popin = document.getElementById('popin');
+    const overlay = document.getElementById('overlay');
+
+    // Ensure popin and overlay are hidden at launch
+    popin.style.display = 'none';
+    overlay.style.display = 'none';
+  });
+
   function showPopin(imageSrc, text) {
-    if (!imageSrc || !text) return; // Prevent empty pop-in
-    document.getElementById('popin-image').src = imageSrc;
-    document.getElementById('popin-text').textContent = text;
-    document.getElementById('popin').style.display = 'flex';
-    document.getElementById('overlay').style.display = 'block';
+    if (!imageSrc || !text) {
+      console.error('Invalid popin data: imageSrc or text is missing');
+      return; // Prevent empty pop-in
+    }
+
+    const popinText = document.getElementById('popin-text');
+    const popinImageContainer = document.getElementById('popin-image-container');
+
+    popinText.textContent = text;
+    popinImageContainer.style.backgroundImage = `url('${imageSrc}')`;
+
+    const popin = document.getElementById('popin');
+    const overlay = document.getElementById('overlay');
+
+    popin.style.display = 'flex';
+    overlay.style.display = 'block';
   }
 
   function hidePopin() {
-    document.getElementById('popin').style.display = 'none';
-    document.getElementById('overlay').style.display = 'none';
+    const popin = document.getElementById('popin');
+    const overlay = document.getElementById('overlay');
+
+    popin.style.display = 'none';
+    overlay.style.display = 'none';
   }
 </script>
