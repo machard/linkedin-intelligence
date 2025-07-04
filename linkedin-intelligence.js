@@ -105,7 +105,7 @@ async function downloadImage(url, itemNumber, page) {
   try {
     // Skip saving images from static.licdn.com and profile-displayphoto
     if (url.includes('profile-displayphoto')) {
-      console.log(`Skipping image: ${url}`);
+      // console.log(`Skipping image: ${url}`);
       return null;
     }
 
@@ -129,7 +129,7 @@ async function downloadImage(url, itemNumber, page) {
     const filePath = path.join(IMAGE_DIR, `gallery-item-${String(itemNumber).padStart(3, '0')}.jpg`);
     fs.writeFileSync(filePath, Buffer.from(imageBuffer));
 
-    console.log(`Saved image to ${filePath} from ${url}`);
+    // console.log(`Saved image to ${filePath} from ${url}`);
     return filePath;
   } catch (error) {
     console.error(`Error saving image: ${error.message}`);
@@ -192,32 +192,59 @@ async function extractPosts(browser) {
     // Enhanced scrolling logic to ensure all posts are loaded
     let stagnant = 0;
     let lastHeight = await page.evaluate(() => document.body.scrollHeight);
-    let maxScrollAttempts = 20; // Limit the number of scroll attempts to avoid infinite loops
+    let maxScrollAttempts = 20; // Increased scroll attempts to ensure more posts are loaded
 
-    while (stagnant < 7 && maxScrollAttempts > 0) {
+    while (stagnant < 10 && maxScrollAttempts > 0) {
+      console.log('Scrolling up slightly to stabilize layout...');
       await page.evaluate(() => window.scrollBy(0, -50)); // upward nudge to stabilize layout
       await new Promise(r => setTimeout(r, 250));
 
+      console.log('Scrolling to the bottom of the page...');
       await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)); // full bottom scroll
 
-      // Click 'Show more results' if visible
       const showMoreButton = await page.evaluate(() => {
         const button = [...document.querySelectorAll('button')].find(el => el.textContent.includes('Show more results'));
-        if (button) button.click();
+        if (button) {
+          console.log('Clicking "Show more results" button...');
+          button.click();
+        }
         return button;
       });
 
-      await new Promise(r => setTimeout(r, 1000));
+      if (showMoreButton) {
+        console.log('Resetting remaining scroll attempts after clicking "Show more results" button...');
+        maxScrollAttempts = 20; // Reset scroll attempts
+      }
+
+      await new Promise(r => setTimeout(r, 2000)); // Increased wait time for posts to load
+
+      // Ensure all posts are loaded before proceeding
+      let postsLoaded = false;
+      while (!postsLoaded) {
+        postsLoaded = await page.evaluate(() => {
+          const posts = document.querySelectorAll('div.feed-shared-update-v2');
+          return posts.length > 0; // Check if posts exist
+        });
+        if (!postsLoaded) {
+          console.log('Waiting for posts to load...');
+          await new Promise(r => setTimeout(r, 500));
+        } else {
+          console.log('Posts detected. Proceeding...');
+        }
+      }
 
       const currentHeight = await page.evaluate(() => document.body.scrollHeight);
       if (currentHeight === lastHeight) {
+        console.log('No change in page height detected. Incrementing stagnant counter...');
         stagnant++;
       } else {
+        console.log('Page height changed. Resetting stagnant counter...');
         stagnant = 0;
         lastHeight = currentHeight;
       }
 
       maxScrollAttempts--;
+      console.log(`Remaining scroll attempts: ${maxScrollAttempts}`);
     }
 
     if (maxScrollAttempts === 0) {
@@ -239,19 +266,10 @@ async function extractPosts(browser) {
         const images = [...block.querySelectorAll('img')]
           .map(img => img.src); // Removed filtering logic here
 
-        const viewsNode = [...block.querySelectorAll('span, button, li')]
-          .map(n => n.innerText?.trim())
-          .find(t => /\d[\d,.]*\s+(views|impressions)/i.test(t));
-        let views = null;
-        if (viewsNode) {
-          const match = viewsNode.match(/\d[\d,.]+/);
-          if (match && match[0]) views = parseInt(match[0].replace(/,/g, ''));
-        }
-
         const timeNode = block.querySelector('span.feed-shared-actor__sub-description');
         const time = timeNode?.innerText?.trim() || '';
 
-        posts.push({ text, images, views, time });
+        posts.push({ text, images, time }); // Removed views from the post object
       });
 
       return posts;
@@ -273,7 +291,7 @@ async function extractPosts(browser) {
       const localImages = await Promise.all(
         images.map(async (image) => {
           if (image.includes('static.licdn.com')) {
-            console.log(`Skipping image: ${image}`);
+            // console.log(`Skipping image: ${image}`);
             return null;
           }
           const localPath = await downloadImage(image, order, page);

@@ -1,7 +1,3 @@
-DEPRECATED : NEW STRATEGY HERE
-
-https://github.com/machard/seed-universe
-
 # LinkedIn Intelligence
 
 ## Overview
