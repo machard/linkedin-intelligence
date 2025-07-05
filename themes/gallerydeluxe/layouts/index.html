@@ -1,21 +1,5 @@
 <div id="homepage">
-  <div id="gallerydeluxe" class="gallery">
-    {{ $galleryPages := where .Site.Pages "Section" "gallery" }}
-    {{ if $galleryPages }}
-      {{ $validPages := where $galleryPages "Params.image" "ne" "" }}
-      {{ $filteredPages := where $validPages "Params.menu" "ne" true }}
-      {{ $sortedPages := sort $filteredPages "Params.watermark" "asc" }}
-      {{ range $sortedPages }}
-        {{ if not .IsSection }}
-          <div class="gallery-item" onclick="showPopin('{{ .Params.image }}', `{{ .Title | safeHTML }}`)">
-            <img src="{{ .Params.image }}" alt="{{ .Title }}">
-          </div>
-        {{ end }}
-      {{ end }}
-    {{ else }}
-      <p>No gallery items found.</p>
-    {{ end }}
-  </div>
+  <div id="gallerydeluxe" class="gallery"></div>
 </div>
 
 <div id="popin" class="popin">
@@ -146,39 +130,82 @@
 </style>
 
 <script>
-  document.addEventListener('DOMContentLoaded', () => {
-    const popin = document.getElementById('popin');
-    const overlay = document.getElementById('overlay');
+const GALLERY_BATCH_SIZE = 20;
+let galleryData = [];
+let galleryIndex = 0;
+let loading = false;
 
-    // Ensure popin and overlay are hidden at launch
-    popin.style.display = 'none';
-    overlay.style.display = 'none';
+function renderGalleryItems(batch) {
+  const gallery = document.getElementById('gallerydeluxe');
+  batch.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'gallery-item';
+    div.onclick = () => showPopin(item.image, item.title);
+    const img = document.createElement('img');
+    img.src = item.image;
+    img.alt = item.title.replace(/<[^>]+>/g, '');
+    div.appendChild(img);
+    gallery.appendChild(div);
   });
+}
 
-  function showPopin(imageSrc, text) {
-    if (!imageSrc || !text) {
-      console.error('Invalid popin data: imageSrc or text is missing');
-      return; // Prevent empty pop-in
+function loadNextBatch() {
+  if (loading) return;
+  loading = true;
+  const nextBatch = galleryData.slice(galleryIndex, galleryIndex + GALLERY_BATCH_SIZE);
+  renderGalleryItems(nextBatch);
+  galleryIndex += nextBatch.length;
+  loading = false;
+}
+
+function handleScroll() {
+  if ((window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 300)) {
+    if (galleryIndex < galleryData.length) {
+      loadNextBatch();
     }
-
-    const popinText = document.getElementById('popin-text');
-    const popinImageContainer = document.getElementById('popin-image-container');
-
-    popinText.innerHTML = text;
-    popinImageContainer.style.backgroundImage = `url('${imageSrc}')`;
-
-    const popin = document.getElementById('popin');
-    const overlay = document.getElementById('overlay');
-
-    popin.style.display = 'flex';
-    overlay.style.display = 'block';
   }
+}
 
-  function hidePopin() {
-    const popin = document.getElementById('popin');
-    const overlay = document.getElementById('overlay');
+document.addEventListener('DOMContentLoaded', async () => {
+  const popin = document.getElementById('popin');
+  const overlay = document.getElementById('overlay');
+  popin.style.display = 'none';
+  overlay.style.display = 'none';
 
-    popin.style.display = 'none';
-    overlay.style.display = 'none';
+  // Fetch gallery data from index.json
+  try {
+    const res = await fetch('./index.json');
+    const json = await res.json();
+    // Support both {pages: [...]} and [...] root
+    galleryData = Array.isArray(json) && json[0] && json[0].pages ? json[0].pages : json;
+    // Sort by watermark (as number, ascending)
+    galleryData.sort((a, b) => Number(a.watermark) - Number(b.watermark));
+    loadNextBatch();
+    window.addEventListener('scroll', handleScroll);
+  } catch (e) {
+    document.getElementById('gallerydeluxe').innerHTML = '<p>Failed to load gallery data.</p>';
   }
+});
+
+function showPopin(imageSrc, text) {
+  if (!imageSrc || !text) {
+    console.error('Invalid popin data: imageSrc or text is missing');
+    return;
+  }
+  const popinText = document.getElementById('popin-text');
+  const popinImageContainer = document.getElementById('popin-image-container');
+  popinText.innerHTML = text;
+  popinImageContainer.style.backgroundImage = `url('${imageSrc}')`;
+  const popin = document.getElementById('popin');
+  const overlay = document.getElementById('overlay');
+  popin.style.display = 'flex';
+  overlay.style.display = 'block';
+}
+
+function hidePopin() {
+  const popin = document.getElementById('popin');
+  const overlay = document.getElementById('overlay');
+  popin.style.display = 'none';
+  overlay.style.display = 'none';
+}
 </script>
