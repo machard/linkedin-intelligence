@@ -5,6 +5,6 @@
     "puppeteer": "^24.10.2"
   },
   "scripts": {
-    "build-gallery": "rm -rf public && node linkedin-intelligence.js --extractPosts --headless && hugo && rm -rf content"
+    "build-gallery": "rm -rf public && rm -rf content && node linkedin-intelligence.js --extractPosts && hugo"
   }
 }

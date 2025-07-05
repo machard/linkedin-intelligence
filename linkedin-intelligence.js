@@ -253,6 +253,30 @@ async function extractPosts(browser) {
 
     console.log('Finished scrolling. Extracting posts...');
 
+        // Just before extracting posts, scroll up post by post to trigger any remaining lazy loading
+    // Scroll up post by post until at the top of the page, even if new posts are loaded
+    let scrollUpIdx = 0;
+    let atTop = false;
+    console.log('Final upward scroll post by post until at the top of the page...');
+    while (!atTop) {
+      await page.evaluate((idx) => {
+        const posts = document.querySelectorAll('div.fie-impression-container');
+        if (posts[posts.length - 1 - idx]) {
+          posts[posts.length - 1 - idx].scrollIntoView({behavior: 'smooth', block: 'start'});
+        }
+      }, scrollUpIdx);
+      await new Promise(r => setTimeout(r, 200));
+      // Consider at top if scrollY is 0 or the first post is visible in the viewport
+      atTop = await page.evaluate(() => {
+        const posts = document.querySelectorAll('div.fie-impression-container');
+        if (posts.length === 0) return window.scrollY === 0;
+        const first = posts[0];
+        const rect = first.getBoundingClientRect();
+        return (window.scrollY === 0) || (rect.top >= 0 && rect.top < window.innerHeight/2);
+      });
+      scrollUpIdx++;
+    }
+
     const extractedPosts = await page.evaluate(() => {
       const posts = [];
 
