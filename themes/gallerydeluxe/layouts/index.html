@@ -7,7 +7,7 @@
       {{ $sortedPages := sort $filteredPages "Params.watermark" "asc" }}
       {{ range $sortedPages }}
         {{ if not .IsSection }}
-          <div class="gallery-item" onclick="showPopin('{{ .Params.image }}', '{{ .Title }}')">
+          <div class="gallery-item" onclick="showPopin('{{ .Params.image }}', `{{ .Title | safeHTML }}`)">
             <img src="{{ .Params.image }}" alt="{{ .Title }}">
           </div>
         {{ end }}
@@ -128,7 +128,7 @@
 
   .popin p {
     font-size: 1.2em;
-    text-align: center;
+    text-align: left;
     overflow-y: auto; /* Allow scrolling for long text */
     max-height: 100%; /* Limit text height */
   }
@@ -164,7 +164,7 @@
     const popinText = document.getElementById('popin-text');
     const popinImageContainer = document.getElementById('popin-image-container');
 
-    popinText.textContent = text;
+    popinText.innerHTML = text;
     popinImageContainer.style.backgroundImage = `url('${imageSrc}')`;
 
     const popin = document.getElementById('popin');

@@ -1,5 +1,5 @@
 <div class="page">
-  <h1>{{ .Title }}</h1>
+  <h1>{{ .Title | safeHTML }}</h1>
   {{ if .Params.image }}
   <img src="{{ .Params.image }}" alt="Gallery Image">
   {{ end }}

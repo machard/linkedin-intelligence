@@ -101,11 +101,10 @@ if (fs.existsSync(IMAGE_DIR)) {
 }
 fs.mkdirSync(IMAGE_DIR, { recursive: true });
 
-async function downloadImage(url, itemNumber, page) {
+async function downloadImage(url, itemNumber, imageIndex, page) {
   try {
     // Skip saving images from static.licdn.com and profile-displayphoto
     if (url.includes('profile-displayphoto')) {
-      // console.log(`Skipping image: ${url}`);
       return null;
     }
 
@@ -126,10 +125,8 @@ async function downloadImage(url, itemNumber, page) {
       return null;
     }
 
-    const filePath = path.join(IMAGE_DIR, `gallery-item-${String(itemNumber).padStart(3, '0')}.jpg`);
+    const filePath = path.join(IMAGE_DIR, `gallery-item-${String(itemNumber).padStart(3, '0')}-${String(imageIndex + 1).padStart(2, '0')}.jpg`);
     fs.writeFileSync(filePath, Buffer.from(imageBuffer));
-
-    // console.log(`Saved image to ${filePath} from ${url}`);
     return filePath;
   } catch (error) {
     console.error(`Error saving image: ${error.message}`);
@@ -189,113 +186,55 @@ async function extractPosts(browser) {
     console.log('Page loaded successfully.');
 
     console.log('🌀 Aggressively scrolling and hydrating feed...');
-    // Enhanced scrolling logic to ensure all posts are loaded
-    let stagnant = 0;
-    let lastHeight = await page.evaluate(() => document.body.scrollHeight);
-    let maxScrollAttempts = 20; // Increased scroll attempts to ensure more posts are loaded
-
-    while (stagnant < 10 && maxScrollAttempts > 0) {
-      console.log('Scrolling up slightly to stabilize layout...');
-      await page.evaluate(() => window.scrollBy(0, -50)); // upward nudge to stabilize layout
-      await new Promise(r => setTimeout(r, 250));
-
-      console.log('Scrolling to the bottom of the page...');
-      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)); // full bottom scroll
-
-      const showMoreButton = await page.evaluate(() => {
-        const button = [...document.querySelectorAll('button')].find(el => el.textContent.includes('Show more results'));
-        if (button) {
-          console.log('Clicking "Show more results" button...');
-          button.click();
-        }
-        return button;
-      });
-
-      if (showMoreButton) {
-        console.log('Resetting remaining scroll attempts after clicking "Show more results" button...');
-        maxScrollAttempts = 20; // Reset scroll attempts
-      }
-
-      await new Promise(r => setTimeout(r, 2000)); // Increased wait time for posts to load
-
-      // Ensure all posts are loaded before proceeding
-      let postsLoaded = false;
-      while (!postsLoaded) {
-        postsLoaded = await page.evaluate(() => {
-          const posts = document.querySelectorAll('div.feed-shared-update-v2');
-          return posts.length > 0; // Check if posts exist
-        });
-        if (!postsLoaded) {
-          console.log('Waiting for posts to load...');
-          await new Promise(r => setTimeout(r, 500));
-        } else {
-          console.log('Posts detected. Proceeding...');
-        }
-      }
-
-      const currentHeight = await page.evaluate(() => document.body.scrollHeight);
-      if (currentHeight === lastHeight) {
-        console.log('No change in page height detected. Incrementing stagnant counter...');
-        stagnant++;
+    // Improved strategy: scroll window down in steps, wait for new posts, stop when no new posts appear after several tries
+    let lastPostCount = 0;
+    let noNewPostTries = 0;
+    const maxNoNewPostTries = 10;
+    const scrollStep = 600; // px
+    const scrollDelay = 500; // ms
+    console.log('Scrolling down the window to load all posts...');
+    while (noNewPostTries < maxNoNewPostTries) {
+      const postCount = await page.evaluate(() => document.querySelectorAll('div.feed-shared-update-v2').length);
+      console.log(`Current post count: ${postCount}`);
+      await page.evaluate((step) => {
+        window.scrollBy({ top: step, left: 0, behavior: 'smooth' });
+      }, scrollStep);
+      await new Promise(r => setTimeout(r, scrollDelay));
+      const newPostCount = await page.evaluate(() => document.querySelectorAll('div.feed-shared-update-v2').length);
+      if (newPostCount > postCount) {
+        noNewPostTries = 0;
       } else {
-        console.log('Page height changed. Resetting stagnant counter...');
-        stagnant = 0;
-        lastHeight = currentHeight;
+        noNewPostTries++;
       }
-
-      maxScrollAttempts--;
-      console.log(`Remaining scroll attempts: ${maxScrollAttempts}`);
+      lastPostCount = newPostCount;
     }
-
-    if (maxScrollAttempts === 0) {
-      console.warn('Reached maximum scroll attempts. Some posts might not be loaded.');
-    }
-
+    // Scroll to the very bottom to ensure all lazy content loads
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await new Promise(r => setTimeout(r, 1200));
     console.log('Finished scrolling. Extracting posts...');
 
-        // Just before extracting posts, scroll up post by post to trigger any remaining lazy loading
-    // Scroll up post by post until at the top of the page, even if new posts are loaded
-    let scrollUpIdx = 0;
-    let atTop = false;
-    console.log('Final upward scroll post by post until at the top of the page...');
-    while (!atTop) {
-      await page.evaluate((idx) => {
-        const posts = document.querySelectorAll('div.fie-impression-container');
-        if (posts[posts.length - 1 - idx]) {
-          posts[posts.length - 1 - idx].scrollIntoView({behavior: 'smooth', block: 'start'});
-        }
-      }, scrollUpIdx);
-      await new Promise(r => setTimeout(r, 200));
-      // Consider at top if scrollY is 0 or the first post is visible in the viewport
-      atTop = await page.evaluate(() => {
-        const posts = document.querySelectorAll('div.fie-impression-container');
-        if (posts.length === 0) return window.scrollY === 0;
-        const first = posts[0];
-        const rect = first.getBoundingClientRect();
-        return (window.scrollY === 0) || (rect.top >= 0 && rect.top < window.innerHeight/2);
-      });
-      scrollUpIdx++;
-    }
-
+    // Use the same selector for extraction as for scrolling
     const extractedPosts = await page.evaluate(() => {
       const posts = [];
-
       const postElements = document.querySelectorAll('div.feed-shared-update-v2');
       postElements.forEach(block => {
+        // Try to find the text content
         const textBlock =
           block.querySelector('div.update-components-text') ||
-          block.querySelector('div.feed-shared-update-v2__description');
+          block.querySelector('div.feed-shared-update-v2__description') ||
+          block.querySelector('span.break-words');
         const text = textBlock?.innerText?.trim() || '';
 
+        // Get images
         const images = [...block.querySelectorAll('img')]
-          .map(img => img.src); // Removed filtering logic here
+          .map(img => img.src);
 
-        const timeNode = block.querySelector('span.feed-shared-actor__sub-description');
+        // Get time
+        const timeNode = block.querySelector('span.feed-shared-actor__sub-description') || block.querySelector('span.update-components-actor__sub-description');
         const time = timeNode?.innerText?.trim() || '';
 
-        posts.push({ text, images, time }); // Removed views from the post object
+        posts.push({ text, images, time });
       });
-
       return posts;
     });
 
@@ -313,16 +252,15 @@ async function extractPosts(browser) {
     // Updated image download logic to use Promise.all for asynchronous fetching
     const downloadImages = async (images, order, page) => {
       const localImages = await Promise.all(
-        images.map(async (image) => {
+        images.map(async (image, idx) => {
           if (image.includes('static.licdn.com')) {
-            // console.log(`Skipping image: ${image}`);
             return null;
           }
-          const localPath = await downloadImage(image, order, page);
+          const localPath = await downloadImage(image, order, idx, page);
           return localPath;
         })
       );
-      return localImages.filter(Boolean); // Remove null values
+      return localImages.filter(Boolean);
     };
 
     // Invoke downloadImages function for each post
@@ -339,6 +277,13 @@ async function extractPosts(browser) {
     }
 
     // Updated markdown generation logic to exclude posts without images
+    // Helper to HTML-encode a string
+    function htmlEncode(str) {
+      if (!str) return '';
+      return str.replace(/\r?\n/g, '<br />')
+                .replace(/"/g, "'");
+    }
+
     const galleryItems = final.map((post, index) => {
       const localImages = post.localImages || [];
       if (localImages.length === 0) {
@@ -346,7 +291,7 @@ async function extractPosts(browser) {
         return null; // Exclude posts without images
       }
       return localImages.map((localImage, imageIndex) => ({
-        title: post.text.replace(/"/g, '').replace(/\n/g, ' ').replace(/:/g, '').replace(/'/g, '').replace(/-/g, '') || `Gallery Item ${index + 1}-${imageIndex + 1}`,
+        title: htmlEncode(post.text) || `Gallery Item ${index + 1}-${imageIndex + 1}`,
         image: `./images/${path.basename(localImage)}`,
         watermark: post.order || '',
       }));

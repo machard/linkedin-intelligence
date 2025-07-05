@@ -3,7 +3,7 @@
   <div class="gallery">
     {{ range .Pages }}
     <div class="gallery-item">
-      <h2>{{ .Title }}</h2>
+      <h2>{{ .Title | safeHTML }}</h2>
       {{ if .Params.image }}
       <img src="{{ .Params.image }}" alt="{{ .Title }}">
       {{ end }}
