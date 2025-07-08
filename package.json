@@ -3,8 +3,5 @@
   "dependencies": {
     "node-fetch": "^3.3.2",
     "puppeteer": "^24.10.2"
-  },
-  "scripts": {
-    "build-gallery": "rm -rf public && rm -rf content && node linkedin-intelligence.js --extractPosts --headless && hugo"
   }
 }

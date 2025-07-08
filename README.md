@@ -1,3 +1,10 @@
+# ⚠️ DEPRECATED ⚠️
+
+## This project has been deprecated. Please check the new repository:
+### 👉 https://github.com/machard/bitcoin-zero-down
+
+---
+
 # LinkedIn Intelligence
 
 ## Overview
