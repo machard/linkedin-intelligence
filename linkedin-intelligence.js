@@ -188,24 +188,34 @@ async function extractPosts(browser) {
     console.log('🌀 Aggressively scrolling and hydrating feed...');
     // Improved strategy: scroll window down in steps, wait for new posts, stop when no new posts appear after several tries
     let lastPostCount = 0;
-    let noNewPostTries = 0;
-    const maxNoNewPostTries = 10;
     const scrollStep = 600; // px
     const scrollDelay = 500; // ms
     console.log('Scrolling down the window to load all posts...');
-    while (noNewPostTries < maxNoNewPostTries) {
+    let foundStopText = false;
+    while (!foundStopText) {
       const postCount = await page.evaluate(() => document.querySelectorAll('div.feed-shared-update-v2').length);
       console.log(`Current post count: ${postCount}`);
       await page.evaluate((step) => {
         window.scrollBy({ top: step, left: 0, behavior: 'smooth' });
       }, scrollStep);
       await new Promise(r => setTimeout(r, scrollDelay));
-      const newPostCount = await page.evaluate(() => document.querySelectorAll('div.feed-shared-update-v2').length);
-      if (newPostCount > postCount) {
-        noNewPostTries = 0;
-      } else {
-        noNewPostTries++;
+      // Check for stop text in any loaded post
+      foundStopText = await page.evaluate(() => {
+        const postElements = document.querySelectorAll('div.feed-shared-update-v2');
+        return Array.from(postElements).some(block => {
+          const textBlock =
+            block.querySelector('div.update-components-text') ||
+            block.querySelector('div.feed-shared-update-v2__description') ||
+            block.querySelector('span.break-words');
+          const text = textBlock?.innerText?.trim() || '';
+          return text.includes('55 Gbps delivery');
+        });
+      });
+      if (foundStopText) {
+        console.log('Found post containing "55 Gbps delivery". Stopping scroll.');
+        break;
       }
+      const newPostCount = await page.evaluate(() => document.querySelectorAll('div.feed-shared-update-v2').length);
       lastPostCount = newPostCount;
     }
     // Scroll to the very bottom to ensure all lazy content loads
