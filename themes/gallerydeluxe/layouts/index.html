@@ -1,16 +1,17 @@
 <head>
+      {{ $base := replaceRE "/$" "" .Site.BaseURL }}
       {{ with .Params.images }}
       {{ range . }}
-        <meta property="og:image" content=".{{ . }}" />
-        <meta property="og:image:secure_url" content=".{{ . }}" />
+        <meta property="og:image" content="{{ $base }}/{{ . | replaceRE "^/" "" }}" />
+        <meta property="og:image:secure_url" content="{{ $base }}/{{ . | replaceRE "^/" "" }}" />
         <meta property="og:image:width" content="512" />
         <meta property="og:image:height" content="512" />
       {{ end }}
     {{ else }}
       {{ with .Site.Params.images }}
         {{ range . }}
-          <meta property="og:image" content=".{{ . }}" />
-          <meta property="og:image:secure_url" content=".{{ . }}" />
+          <meta property="og:image" content="{{ $base }}/{{ . | replaceRE "^/" "" }}" />
+          <meta property="og:image:secure_url" content="{{ $base }}/{{ . | replaceRE "^/" "" }}" />
           <meta property="og:image:width" content="512" />
           <meta property="og:image:height" content="512" />
         {{ end }}
