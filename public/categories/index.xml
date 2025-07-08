@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>Categories on My Hugo Site</title>
-    <link>http://example.com/categories/</link>
-    <description>Recent content in Categories on My Hugo Site</description>
+    <title>Categories on Matthieu Achard — LinkedIn Intelligence</title>
+    <link>https://machard.github.io/linkedin-intelligence/categories/</link>
+    <description>Recent content in Categories on Matthieu Achard — LinkedIn Intelligence</description>
     <generator>Hugo</generator>
     <language>en-us</language>
-    <atom:link href="http://example.com/categories/index.xml" rel="self" type="application/rss+xml" />
+    <atom:link href="https://machard.github.io/linkedin-intelligence/categories/index.xml" rel="self" type="application/rss+xml" />
   </channel>
 </rss>

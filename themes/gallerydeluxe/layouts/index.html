@@ -1,3 +1,19 @@
+<head>
+      {{ with .Params.images }}
+      {{ range . }}
+        <meta property="og:image" content="{{ . | absURL }}" />
+        <meta property="og:image:secure_url" content="{{ . | absURL }}" />
+      {{ end }}
+    {{ else }}
+      {{ with .Site.Params.images }}
+        {{ range . }}
+          <meta property="og:image" content="{{ . | absURL }}" />
+          <meta property="og:image:secure_url" content="{{ . | absURL }}" />
+        {{ end }}
+      {{ end }}
+    {{ end }}
+</head>
+
 <div id="homepage">
   <div id="gallerydeluxe" class="gallery"></div>
 </div>

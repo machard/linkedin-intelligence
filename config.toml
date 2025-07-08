@@ -1,7 +1,7 @@
-baseURL = "http://example.com/"
+baseURL = "https://machard.github.io/linkedin-intelligence/"
 languageCode = "en-us"
 theme = "gallerydeluxe"
-title = "My Hugo Site"
+title = "Matthieu Achard — LinkedIn Intelligence"
 
 [taxonomies]
 category = "categories"
@@ -9,6 +9,7 @@ tag = "tags"
 
 [params]
 galleryDir = "content/gallery"
+images = ["/glyph.png"]
 
 [outputs]
 home = ["HTML", "JSON"]
