@@ -1,7 +1,7 @@
 baseURL = "https://machard.github.io/linkedin-intelligence"
 languageCode = "en-us"
 theme = "gallerydeluxe"
-title = "Matthieu Achard — LinkedIn Intelligence"
+title = "LinkedIn Intelligence"
 
 [taxonomies]
 category = "categories"
@@ -10,6 +10,7 @@ tag = "tags"
 [params]
 galleryDir = "content/gallery"
 images = ["/glyph.png"]
+description = "Resonant Signal"
 
 [outputs]
 home = ["HTML", "JSON"]
